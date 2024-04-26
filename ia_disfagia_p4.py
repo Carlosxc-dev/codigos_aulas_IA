@@ -1,115 +1,90 @@
-from glob import glob
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.feature_selection import SelectKBest, chi2
-import joblib
-from sklearn.metrics import classification_report
+from sklearn.ensemble import IsolationForest
+import os
 import librosa
 import numpy as np
-import pandas as pd
+import matplotlib.pyplot as plt
 from tqdm import tqdm
-import os
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
 
-partes_audio = []
-dados_ext = []
+audio_path = glob.glob('test/valid/*.mp3')
+print(f"caminho dos audios: {audio_path}\n\n")
 
+y, sr = librosa.load(audio_path[4])  # sr = 22050 , y = ndarray
+audio = y
+x = np.arange(len(y))/sr
+t = np.arange(len(audio)) / sr
+tamanho_intervalo = 0.5 * sr
+passo = 0.25 * sr
+inicio_intervalo = 0
+limites = []
+lim = []
+dados = []
 
-def split_audio_and_check(input_file):
-    # Carrega o áudio
-    y, sr = librosa.load(input_file, sr=None)
+# Enquanto o início do próximo intervalo for menor que o comprimento total do áudio
+while inicio_intervalo + tamanho_intervalo < len(audio):
+    # Calcular o fim do intervalo
+    fim_intervalo = inicio_intervalo + tamanho_intervalo
 
-    # Divide o áudio em partes de 0.5 segundos
-    hop_length = int(0.5 * sr)
-    parts = librosa.effects.split(y, hop_length=hop_length)
+    inicio_intervalo = int(inicio_intervalo)
+    fim_intervalo = int(fim_intervalo)
 
-    for i, (start, end) in enumerate(parts):
-        print(f"Parte {i+1}:")
-        duration = librosa.get_duration(y=y[start:end], sr=sr)
-        print(f"Duração da parte: {duration} segundos")
-
-        # Verifica a cada 0.25 segundos
-        check_step = int(0.25 * sr)
-        for j in range(start, end, check_step):
-            sub_audio = y[j:min(j+check_step, end)]
-            amplitude = max(sub_audio) - min(sub_audio)
-            time_sec = librosa.samples_to_time(j, sr=sr)
-            print(f"Amplitude na posição {time_sec} segundos: {amplitude}")
-            partes_audio.append(sub_audio)
-
-
-def extrair_caracteristicas():
-    y = partes_audio[0]
-    chroma_stft = librosa.feature.chroma_stft(y=y)
-    tonnetz = librosa.feature.tonnetz(y=y)
-    rmse = librosa.feature.rms(y=y)
-    spec_cent = librosa.feature.spectral_centroid(y=y)
-    spec_bw = librosa.feature.spectral_bandwidth(y=y)
-    rolloff = librosa.feature.spectral_rolloff(y=y)
-    zcr = librosa.feature.zero_crossing_rate(y)
-    mfcc = librosa.feature.mfcc(y=y)
-    melspectrogram = librosa.feature.melspectrogram(y=y)
-    # fazer a média dos valores
-    atributos = []
-    atributos.extend(np.mean(chroma_stft, axis=1))
-    atributos.extend(np.mean(tonnetz, axis=1))
-    atributos.extend(np.mean(rmse, axis=1))
-    atributos.extend(np.mean(spec_cent, axis=1))
-    atributos.extend(np.mean(spec_bw, axis=1))
-    atributos.extend(np.mean(rolloff, axis=1))
-    atributos.extend(np.mean(zcr, axis=1))
-    atributos.extend(np.mean(mfcc, axis=1))
-    atributos.extend(np.mean(melspectrogram, axis=1))
-
-    atributos.extend(np.std(chroma_stft, axis=1))
-    atributos.extend(np.std(tonnetz, axis=1))
-    atributos.extend(np.std(rmse, axis=1))
-    atributos.extend(np.std(spec_cent, axis=1))
-    atributos.extend(np.std(spec_bw, axis=1))
-    atributos.extend(np.std(rolloff, axis=1))
-    atributos.extend(np.std(zcr, axis=1))
-    atributos.extend(np.std(mfcc, axis=1))
-    atributos.extend(np.std(melspectrogram, axis=1))
-
-    atributos.extend(np.ptp(chroma_stft, axis=1))
-    atributos.extend(np.ptp(tonnetz, axis=1))
-    atributos.extend(np.ptp(rmse, axis=1))
-    atributos.extend(np.ptp(spec_cent, axis=1))
-    atributos.extend(np.ptp(spec_bw, axis=1))
-    atributos.extend(np.ptp(rolloff, axis=1))
-    atributos.extend(np.ptp(zcr, axis=1))
-    atributos.extend(np.ptp(mfcc, axis=1))
-    atributos.extend(np.ptp(melspectrogram, axis=1))
-
-    dados_ext.append(atributos)
+    # Adicionar os limites do intervalo à lista de limites
+    limites.append((x[inicio_intervalo:fim_intervalo],
+                   y[inicio_intervalo:fim_intervalo]))
+    lim.append((inicio_intervalo, fim_intervalo))
+    # Atualizar o início para o próximo intervalo
+    dados.append(limites)
+    inicio_intervalo += passo
 
 
-def test_modelo():
-    # Carregar o modelo treinado
-    modelo = joblib.load('RandomForestClassifier.joblib')
+array_de_dados = np.array(limites, dtype=int)
 
-    # Normalizar os dados
-    scaler = MinMaxScaler()
-    dados_normalizados = scaler.fit_transform(dados_ext)
+# Plotar os limites em um gráfico
+plt.figure(figsize=(10, 5))
+plt.plot(audio, color='blue')
 
-    # Selecionar as melhores características
-    selecao_caracteristicas = SelectKBest(chi2, k=10)
-    dados_selecionados = selecao_caracteristicas.fit_transform(
-        dados_normalizados)
+# Plotar os limites
+for limite in lim:
+    plt.axvline(x=limite[0], color='red', linestyle='--')
+    plt.axvline(x=limite[1], color='red', linestyle='--')
 
-    # Fazer a previsão usando o modelo
-    previsao = modelo.predict(dados_selecionados)
+plt.xlabel('Amostras')
+plt.ylabel('Amplitude')
 
-    # Definir o valor de y_true
-    y_true = ...
+plt.show()
 
-    # Imprimir o relatório de classificação
-    print(classification_report(previsao, y_true))
+# ---------------------------------------------------------------- aplicar no modelo
 
+# Transformar a lista de limites em um array numpy
 
-# Substitua 'caminho/para/seu/arquivo.mp3' pelo caminho do seu arquivo de áudio
-split_audio_and_check("./a00659.mp3")
-extrair_caracteristicas()
-test_modelo()
+X = []
+for i, linha in enumerate(dados):
+    for x, y in linha:
+        X.append(y)
 
+# Transformar a lista de limites em um array numpy bidimensional
+X = np.array(X)
 
-# for parte in partes_audio:
-#     print(f"parte: {parte} \n")
+clf = IsolationForest(contamination=0.20)
+clf.fit(X)
+ano = clf.predict(X)
+ano = (ano == -1)
+
+fig, ax = plt.subplots(1, 1, figsize=(15, 3*len(dados)))
+n = -1
+
+for linha in dados:
+    for x, y in linha:
+        if ano[n]:
+            plt.axvline(x=x[0], color='red', linestyle='--')
+            plt.axvline(x=y[1], color='red', linestyle='--')
+
+for i, linha in enumerate(dados):
+    for x, y in linha:
+        n += 1
+        ax.plot(x, y, color='black' if ano[n] else 'gray')
+        plt.axvline(x=x[0], ymax=y[0], ymin=y[1], color='red',
+                    linestyle='--' if ano[n] else None)
+plt.show()
