@@ -66,14 +66,15 @@ predictions = clf.predict(X)
 predictions = np.where(predictions == -1, -1, 1)
 
 # Plotar os dados de áudio
-# Plotar os dados de áudio
 fig, ax = plt.subplots(len(dados), 1, figsize=(15, 3*len(dados)))
 for i, linha in enumerate(dados):
     ax[i].set_title(bons[i])
     for x, y in linha:
         ax[i].plot(x, y, color='blue')  # Plotar os dados de áudio em azul
         for intervalo, anomalia in zip(range(0, len(x) - janela, passo), predictions):
+            print(anomalia)
             if anomalia == -1:  # Se uma anomalia for identificada
+                print(anomalia)
                 inicio = int(intervalo)
                 fim = int(intervalo + janela)
                 ax[i].axvspan(x[inicio], x[fim], color='red',
